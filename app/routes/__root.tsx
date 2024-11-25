@@ -1,0 +1,100 @@
+import type { QueryClient } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import {
+  createRootRouteWithContext,
+  Outlet,
+  ScrollRestoration,
+} from "@tanstack/react-router";
+import { createServerFn, Meta, Scripts } from "@tanstack/start";
+import { lazy, Suspense } from "react";
+
+import { getAuthSession } from "~/server/auth";
+import appCss from "~/styles/app.css?url";
+
+const TanStackRouterDevtools =
+  process.env.NODE_ENV === "production"
+    ? () => null // Render nothing in production
+    : lazy(() =>
+        // Lazy load in development
+        import("@tanstack/router-devtools").then((res) => ({
+          default: res.TanStackRouterDevtools,
+        })),
+      );
+
+const getUser = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  const session = await getAuthSession();
+
+  return session.user;
+});
+
+const RootComponent = () => {
+  return (
+    <RootDocument>
+      <Outlet />
+    </RootDocument>
+  );
+};
+
+export const Route = createRootRouteWithContext<{
+  queryClient: QueryClient;
+}>()({
+  beforeLoad: async () => {
+    const user = await getUser();
+
+    return {
+      user,
+    };
+  },
+  head: () => ({
+    meta: [
+      {
+        charSet: "utf-8",
+      },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1",
+      },
+      {
+        title: "TanStarter",
+      },
+    ],
+    links: [
+      {
+        rel: "stylesheet",
+        href: appCss,
+      },
+    ],
+  }),
+  component: RootComponent,
+});
+
+const RootDocument = ({ children }: { readonly children: React.ReactNode }) => {
+  return (
+    <html>
+      <head>
+        <Meta />
+      </head>
+      <body>
+        {children}
+        <ScrollRestoration />
+        <ReactQueryDevtools buttonPosition="bottom-left" />
+        <Suspense>
+          <TanStackRouterDevtools position="bottom-right" />
+        </Suspense>
+        <Scripts />
+        {/* eslint-disable-next-line @eslint-react/dom/no-dangerously-set-innerhtml */}
+        <script
+          id="theme"
+          dangerouslySetInnerHTML={{
+            __html: `document.documentElement.classList.toggle(
+                      'dark',
+                      localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)
+                    )`,
+          }}
+        ></script>
+      </body>
+    </html>
+  );
+};
